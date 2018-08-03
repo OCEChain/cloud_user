@@ -176,7 +176,6 @@ func (l *Login) Serve(ctx *faygo.Context) error {
 		return jsonReturn(ctx, 0, err.Error())
 	}
 	//将用户信息保存到缓存中
-
 	err = model.SetToken(token, user, userInfo)
 	if err != nil {
 		return jsonReturn(ctx, 0, err.Error())
@@ -442,4 +441,22 @@ func (t *TaskStatus) Serve(ctx *faygo.Context) error {
 	data["audit_status"] = userData.UserInfo.Audit_status
 	data["info_status"] = userData.UserInfo.Info_status
 	return jsonReturn(ctx, 200, data)
+}
+
+//修改用户账号(用于测试)
+type EditAccount struct {
+	Account    string `param:"<in:formData><required><name:account><desc:用户手机号,格式为18022407520,不需要加前缀>"`
+	NewAccount string `param:"<in:formData><required><name:new_account><desc:用户手机号,格式为18022407520,不需要加前缀>"`
+}
+
+func (e *EditAccount) Serve(ctx *faygo.Context) error {
+	err := ctx.BindForm(e)
+	if err != nil {
+		return jsonReturn(ctx, 0, "参数解析出错")
+	}
+	err = model.DefaultUser.EditAccount(e.Account, e.NewAccount)
+	if err != nil {
+		return jsonReturn(ctx, 0, err.Error())
+	}
+	return jsonReturn(ctx, 200, "修改成功")
 }

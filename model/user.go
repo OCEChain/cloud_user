@@ -366,14 +366,14 @@ func (u *User) EditToken(account string, token string) (err error) {
 	engine := xorm.MustDB()
 	user := new(User)
 	user.Token = token
-	n, err := engine.Where("account=?", account).Cols("token").Update(user)
+	faygo.Debug(token)
+	_, err = engine.Where("account=?", account).Cols("token").Update(user)
 	if err != nil {
+		faygo.Debug(err)
 		err = SystemFail
 		return
 	}
-	if n == 0 {
-		err = errors.New("登陆失败")
-	}
+
 	return
 }
 
@@ -388,5 +388,13 @@ func (u *User) GetTokenByUid(uid string) (token string, err error) {
 	if !has {
 		err = errors.New("不存在的用户")
 	}
+	return
+}
+
+func (u *User) EditAccount(account, new_account string) (err error) {
+	engine := xorm.MustDB()
+	user := new(User)
+	user.Account = new_account
+	_, err = engine.Table(User_TABLE).Where("account=?", account).Cols("account").Update(user)
 	return
 }
