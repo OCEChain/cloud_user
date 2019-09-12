@@ -19,6 +19,7 @@ func Route(frame *faygo.Framework) {
 		frame.NewNamedAPI("修改用户信息", "POST", "/editinfo", &handler.EditInfo{}),
 		frame.NewNamedAPI("获取用户完成状况", "POST", "/task_status", &handler.TaskStatus{}),
 		frame.NewNamedAPI("修改用户账号", "POST", "/edit_account", &handler.EditAccount{}),
+		frame.NewNamedAPI("修改声纹信息", "POST", "/edit_gtspwd", &handler.EditGstpwd{}),
 
 		//以下是用于后台获取数据
 		frame.NewGroup("admin",

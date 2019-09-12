@@ -41,6 +41,7 @@ func (u *Userinfo) GetInfo(uid string) (userInfo Userinfo, err error) {
 	userInfo = Userinfo{}
 	has, err := engine.Where("uid=?", uid).Get(&userInfo)
 	if err != nil {
+		faygo.Info("通过uid查询用户出现一个意外错误，错误信息为:", err.Error())
 		err = SystemFail
 		return
 	}
@@ -55,27 +56,26 @@ func (u *Userinfo) GetInfo(uid string) (userInfo Userinfo, err error) {
 func (u *Userinfo) EditFace(token string, userData UserData, uid string, face string) (err error) {
 	engine := xorm.MustDB()
 	sess := engine.NewSession()
+	defer sess.Close()
 	err = sess.Begin()
 	if err != nil {
 		err = SystemFail
 		return
 	}
 	userInfo := new(Userinfo)
-	userInfo.Face = face
-	n, err := sess.Where("uid=?", uid).Cols("face").Update(userInfo)
+	userInfo.Face = face + "?time=" + fmt.Sprintf("%v", time.Now().Unix())
+	_, err = sess.Where("uid=?", uid).Cols("face").Update(userInfo)
 	if err != nil {
+		faygo.Info(err)
 		err = SystemFail
 		sess.Rollback()
 		return
 	}
-	if n == 0 {
-		err = errors.New("修改失败")
-		sess.Rollback()
-		return
-	}
-	userData.UserInfo.Face = face + "?time=" + fmt.Sprintf("%v", time.Now().Unix())
+
+	userData.UserInfo.Face = userInfo.Face
 	err = EditToken(token, userData)
 	if err != nil {
+		faygo.Info(err)
 		err = SystemFail
 		sess.Rollback()
 		return
@@ -87,8 +87,10 @@ func (u *Userinfo) EditFace(token string, userData UserData, uid string, face st
 func (u *Userinfo) EditInfo(token string, userData UserData, uid, nickname string, sex int, edit_info_status bool) (err error) {
 	engine := xorm.MustDB()
 	sess := engine.NewSession()
+	defer sess.Close()
 	err = sess.Begin()
 	if err != nil {
+		faygo.Info(err)
 		err = SystemFail
 		return
 	}
@@ -102,6 +104,7 @@ func (u *Userinfo) EditInfo(token string, userData UserData, uid, nickname strin
 	}
 	_, err = sess.Where("uid=?", uid).Cols(cols...).Update(userInfo)
 	if err != nil {
+		faygo.Info(err)
 		err = SystemFail
 		sess.Rollback()
 		return
@@ -230,6 +233,7 @@ func (u *Userinfo) EditAudit(uid string, status int) (err error) {
 	}
 
 	sess := engine.NewSession()
+	defer sess.Close()
 	err = sess.Begin()
 	if err != nil {
 		err = SystemFail

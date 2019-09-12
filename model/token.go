@@ -2,7 +2,9 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/go-errors/errors"
+	"github.com/henrylee2cn/faygo"
 	"user/redis"
 )
 
@@ -26,6 +28,12 @@ func GetInfoByToken(token string) (userData UserData, err error) {
 		err = SystemFail
 		return
 	}
+	fmt.Println("当前重置的token为：", token)
+	_, err = redis.NewRedis().Set(token, userData, 21600) //设置成6小时后才失效
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	return
 }
 
@@ -40,8 +48,9 @@ func SetToken(token string, user User, userInfo Userinfo) (err error) {
 	userData.UserInfo = userInfo
 
 	//放到缓存中
-	_, err = redis.NewRedis().Set(token, userData, "21600") //设置成6小时后才失效
+	_, err = redis.NewRedis().Set(token, userData, 21600) //设置成6小时后才失效
 	if err != nil {
+		faygo.Info(err)
 		err = SystemFail
 	}
 	return
@@ -49,7 +58,7 @@ func SetToken(token string, user User, userInfo Userinfo) (err error) {
 
 //重新设置usertoken
 func EditToken(token string, userData UserData) (err error) {
-	_, err = redis.NewRedis().Set(token, userData, "21600") //设置成6小时后才失效
+	_, err = redis.NewRedis().Set(token, userData, 21600) //设置成6小时后才失效
 	if err != nil {
 		err = SystemFail
 	}

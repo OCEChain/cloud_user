@@ -16,7 +16,7 @@ type User struct {
 	Account  string `xorm:"not null default('') char(20) comment(账号)"`
 	Prefix   string `xorm:"not null default('') char(6) comment('前缀')"`
 	Passwd   string `xorm:"not null default('') char(32) comment(密码)"`
-	Gstpwd   string `xorm:"not null default('') char(32) comment(手势密码)"`
+	Gstpwd   string `xorm:"not null default('') varchar(255) comment(手势密码：换成是声纹信息)"`
 	Tradepwd string `xorm:"not null default('') char(32) comment(交易密码)"`
 	Token    string `xorm:"not null default('') char(32) comment('用户登陆的token')"`
 	Status   int    `xorm:"not null default(0) tinyint(4) comment('状态，0为正常，1为封号')"`
@@ -41,6 +41,7 @@ func (u *User) GetUserByAccount(account string) (user User, err error) {
 	//查询是否存在
 	has, err := engine.Where("account=?", account).Get(&user)
 	if err != nil {
+		faygo.Info("查询用户出现一个意外错误，错误信息为:", err.Error())
 		err = SystemFail
 		return
 	}
@@ -60,6 +61,7 @@ func (u *User) Register(prefix, account, uid, passwd, gstpwd, tradepwd, ip, Devi
 	//查询是否存在
 	has, err := engine.Table(User_TABLE).Where("account=?", account).Exist()
 	if err != nil {
+		faygo.Info("注册用户出现一个意外错误，错误信息为:", err.Error())
 		err = SystemFail
 		return
 	}
@@ -197,10 +199,41 @@ func (u *User) Register(prefix, account, uid, passwd, gstpwd, tradepwd, ip, Devi
 	return
 }
 
+//修改声纹信息
+func (u *User) EditGstpwd(uid, gstpwd string) (err error) {
+	engine := xorm.MustDB()
+	obj := new(User)
+	obj.Gstpwd = gstpwd
+	_, err = engine.Where("uid=?", uid).Cols("gstpwd").Update(obj)
+	if err != nil {
+		faygo.Info("修改声纹信息出错，错误信息为：", err.Error())
+		err = SystemFail
+	}
+	return
+}
+
+//获取用户声纹信息
+func (u *User) CheckGstpwd(uid, gstpwd string) (obj *User, err error) {
+	engine := xorm.MustDB()
+	obj = new(User)
+	has, err := engine.Where("uid=?", uid).Get(obj)
+	if err != nil {
+		faygo.Info("获取声纹信息出错，错误信息为：", err.Error())
+		err = SystemFail
+		return
+	}
+
+	if !has {
+		err = NotAccount
+	}
+	return
+}
+
 //修改密码
 func (u *User) EditPwd(userData User, pwd string) (err error) {
 	engine := xorm.MustDB()
 	sess := engine.NewSession()
+	defer sess.Close()
 	err = sess.Begin()
 	if err != nil {
 		err = SystemFail
@@ -265,6 +298,7 @@ func (u *User) Count() (count int64, err error) {
 func (u *User) EditStatus(account string, status int) (err error) {
 	engine := xorm.MustDB()
 	sess := engine.NewSession()
+	defer sess.Close()
 	err = sess.Begin()
 	if err != nil {
 		err = SystemFail
@@ -366,10 +400,9 @@ func (u *User) EditToken(account string, token string) (err error) {
 	engine := xorm.MustDB()
 	user := new(User)
 	user.Token = token
-	faygo.Debug(token)
 	_, err = engine.Where("account=?", account).Cols("token").Update(user)
 	if err != nil {
-		faygo.Debug(err)
+		faygo.Info(err)
 		err = SystemFail
 		return
 	}

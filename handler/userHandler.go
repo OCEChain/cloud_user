@@ -13,7 +13,7 @@ import (
 type Register struct {
 	Account     string `param:"<in:formData><required><name:account><desc:用户手机号,格式为08618022407520,前面三位为区号>"`
 	Passwd      string `param:"<in:formData><required><name:passwd><desc:用户密码>"`
-	Gstpwd      string `param:"<in:formData><name:gstpwd><desc:手势密码>"`
+	Gstpwd      string `param:"<in:formData><name:gstpwd><desc:声纹密码>"`
 	Tradepwd    string `param:"<in:formData><name:tradepwd><desc:交易密码>"`
 	Ip          string `param:"<in:formData><name:ip><desc:注册地点ip>"`
 	Device_type string `param:"<in:formData><name:device_type><desc:注册设备类型:ios或android>"`
@@ -35,10 +35,6 @@ func (r *Register) Serve(ctx *faygo.Context) error {
 	}
 	if r.Tradepwd != "" && !CheckTradepwd(r.Tradepwd) {
 		return jsonReturn(ctx, 0, "请输入6位数组组成的交易密码")
-	}
-
-	if r.Gstpwd != "" && !CheckGstpwd(r.Gstpwd) {
-		return jsonReturn(ctx, 0, "请输入1～24位数字组成的的手势密码")
 	}
 
 	if r.Ip != "" && !IsIP(r.Ip) {
@@ -102,6 +98,38 @@ func (r *Register) Doc() faygo.Doc {
 	}
 }
 
+type EditGstpwd struct {
+	Token  string `param:"<in:formData><required><name:token>"`
+	Gstpwd string `param:"<in:formData><required><name:gstpwd>"`
+}
+
+func (f *EditGstpwd) Serve(ctx *faygo.Context) error {
+	err := ctx.BindForm(f)
+	if err != nil {
+		return jsonReturn(ctx, 0, "参数解析出错")
+	}
+	if f.Token == "" {
+		return jsonReturn(ctx, 0, "token不能为空")
+	}
+	if f.Gstpwd == "" {
+		return jsonReturn(ctx, 0, "声纹信息不能为空")
+	}
+	//根据token获取用户信息
+	userData, err := model.GetInfoByToken(strings.TrimSpace(f.Token))
+	if err == model.LoginExpire {
+		return jsonReturn(ctx, 1, err.Error())
+	}
+	if err != nil {
+		return jsonReturn(ctx, 0, err.Error())
+	}
+	user_model := new(model.User)
+	err = user_model.EditGstpwd(userData.User.Uid, f.Gstpwd)
+	if err != nil {
+		return jsonReturn(ctx, 0, err.Error())
+	}
+	return jsonReturn(ctx, 200, "修改成功")
+}
+
 type FaceEdit struct {
 	Token string                `param:"<in:formData><required><name:token>"`
 	File  *multipart.FileHeader `param:"<in:formData><required><name:file>"`
@@ -113,7 +141,10 @@ func (f *FaceEdit) Serve(ctx *faygo.Context) error {
 		return jsonReturn(ctx, 0, "token不能为空")
 	}
 	//根据token获取用户信息
-	userData, err := model.GetInfoByToken(token)
+	userData, err := model.GetInfoByToken(strings.TrimSpace(token))
+	if err == model.LoginExpire {
+		return jsonReturn(ctx, 1, err.Error())
+	}
 	if err != nil {
 		return jsonReturn(ctx, 0, err.Error())
 	}
@@ -123,16 +154,12 @@ func (f *FaceEdit) Serve(ctx *faygo.Context) error {
 		return jsonReturn(ctx, 0, "上传失败")
 	}
 
-	//判断用户的头像信息是否为空
-	if userData.UserInfo.Face == "" {
-		//修改用户的头像
-		err = model.DefaultUserinfo.EditFace(token, userData, userData.User.Uid, saveInfo.Url)
-		if err != nil {
-			return jsonReturn(ctx, 0, err.Error())
-		}
-		//更新token中的信息
-
+	//修改用户的头像
+	err = model.DefaultUserinfo.EditFace(token, userData, userData.User.Uid, saveInfo.Url)
+	if err != nil {
+		return jsonReturn(ctx, 0, err.Error())
 	}
+
 	return jsonReturn(ctx, 200, saveInfo.Url+"?time="+fmt.Sprintf("%v", time.Now().Unix()))
 }
 
@@ -180,7 +207,11 @@ func (l *Login) Serve(ctx *faygo.Context) error {
 	if err != nil {
 		return jsonReturn(ctx, 0, err.Error())
 	}
-	return jsonReturn(ctx, 200, token)
+
+	res := make(map[string]string)
+	res["token"] = token
+	res["gstpwd"] = user.Gstpwd
+	return jsonReturn(ctx, 200, res)
 }
 
 func (l *Login) Doc() faygo.Doc {
@@ -224,7 +255,7 @@ func (s *Send_SMS) Serve(ctx *faygo.Context) error {
 //找回密码
 type FindPwd struct {
 	Account    string `param:"<in:formData><required><name:account>"`
-	VerifyCode string `param:"<in:formData><required><name:verifycode><desc:验证码(暂时不验证，随便传个参数)>"`
+	VerifyCode string `param:"<in:formData><required><name:verifycode><desc:验证码>"`
 	NewPwd     string `param:"<in:formData><required><name:passwd><desc:新密码密码>"`
 }
 
@@ -282,7 +313,10 @@ func (f *FIndPwdSendSMS) Serve(ctx *faygo.Context) error {
 		return jsonReturn(ctx, 0, "token不能为空")
 	}
 	//根据用户token获取用户信息
-	userData, err := model.GetInfoByToken(f.Token)
+	userData, err := model.GetInfoByToken(strings.TrimSpace(f.Token))
+	if err == model.LoginExpire {
+		return jsonReturn(ctx, 1, err.Error())
+	}
 	if err != nil {
 		return jsonReturn(ctx, 0, err.Error())
 	}
@@ -314,16 +348,14 @@ func (g *GetUserInfo) Serve(ctx *faygo.Context) error {
 	if g.Token == "" {
 		return jsonReturn(ctx, 0, "token不能为空")
 	}
+
 	//根据用户token获取用户信息
-	userData, err := model.GetInfoByToken(g.Token)
+	userData, err := model.GetInfoByToken(strings.TrimSpace(g.Token))
 	if err == model.LoginExpire {
 		return jsonReturn(ctx, 1, err.Error())
 	}
 	if err != nil {
 		return jsonReturn(ctx, 0, err.Error())
-	}
-	if userData.UserInfo.Face != "" {
-		userData.UserInfo.Face = userData.UserInfo.Face + "?time=" + fmt.Sprintf("%v", time.Now().Unix())
 	}
 
 	return jsonReturn(ctx, 200, userData.UserInfo)
@@ -348,7 +380,10 @@ func (c *Certification) Serve(ctx *faygo.Context) error {
 		return jsonReturn(ctx, 0, "token不能为空")
 	}
 	//根据用户token获取用户信息
-	userData, err := model.GetInfoByToken(c.Token)
+	userData, err := model.GetInfoByToken(strings.TrimSpace(c.Token))
+	if err == model.LoginExpire {
+		return jsonReturn(ctx, 1, err.Error())
+	}
 	if err != nil {
 		return jsonReturn(ctx, 0, err.Error())
 	}
@@ -401,7 +436,10 @@ func (e *EditInfo) Serve(ctx *faygo.Context) error {
 		return jsonReturn(ctx, 0, "token不能为空")
 	}
 	//根据token获取用户信息
-	userData, err := model.GetInfoByToken(e.Token)
+	userData, err := model.GetInfoByToken(strings.TrimSpace(e.Token))
+	if err == model.LoginExpire {
+		return jsonReturn(ctx, 1, err.Error())
+	}
 	if err != nil {
 		return jsonReturn(ctx, 0, err.Error())
 	}
@@ -430,7 +468,7 @@ func (t *TaskStatus) Serve(ctx *faygo.Context) error {
 		return jsonReturn(ctx, 0, "token不能为空")
 	}
 	//根据用户token获取用户信息
-	userData, err := model.GetInfoByToken(t.Token)
+	userData, err := model.GetInfoByToken(strings.TrimSpace(t.Token))
 	if err == model.LoginExpire {
 		return jsonReturn(ctx, 1, err.Error())
 	}

@@ -40,6 +40,7 @@ func (u *UserRegisterInfo) EditIdCart(uid, id_name, id_num, id_cart, id_cart_bac
 	userRegisterInfo.Id_name = id_name
 	userRegisterInfo.Id_num = id_num
 	sess := engine.NewSession()
+	defer sess.Close()
 	err = sess.Begin()
 	if err != nil {
 		err = SystemFail
